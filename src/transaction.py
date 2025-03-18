@@ -3,7 +3,13 @@ from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 
 class Transaction:
-    # ... [existing __init__ and validate methods]
+    def __init__(self, proposer, action, metadata, timestamp):
+        self.proposer = proposer
+        self.action = action
+        self.metadata = metadata
+        self.timestamp = timestamp
+        self.signature = None
+
     def sign_transaction(self, private_key_str):
         key = RSA.import_key(private_key_str)
         message = (str(self.proposer) + str(self.action) +
