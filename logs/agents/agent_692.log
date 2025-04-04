@@ -1,0 +1,22 @@
+/Users/chahal/OptimalConsensus_MAS/src/agent.py:32: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp=str(datetime.datetime.utcnow())
+Agent 692 published vote: {'agent_id': 692, 'proposal': {'proposer': 692, 'action': 'PROPOSE_BLOCK', 'metadata': 'Block_A', 'timestamp': '2025-04-04 22:41:50.735241', 'signature': '59389c6de130debee2a15dc947bac4c85e8db100ec1433d00fa6aa7193f2d405b98c5c6a330b80f66bc30123e8dad5a357df17334f87c1361b8f6749e224567e0671cb39eaab389e91ed39710a29d1b4e2075eb92b5c831b053d13ef2e2c01fdce94766c0e3f41712fad5b27bc42f3e93bd95e03c58f39e2bbf39c8c8d9274efa0d0ba7f55d3e1fa651d2ca9a07f4425e206b8f795bdcd9a08a1451a25ab1eaa7de6bd62ec8d5cbadeca755e236378d6f0361e015a353803f0772d498b010e5243d5ed1f072c00cf0cbdc29de4824d7a52de2cb7c4d96ffcb42e28a4611f7bb0f9b6d8947bd968af490fa6dd47618f4e66b3343e5080da2c9ce5b960ab8a1029', 'public_key': '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwa/0GXC1UOc7rWD/vyLC\nP86Bv+wOB4KmKODBKpB5hCUpSIHk/r+Xk71tJ6b1CCfoosNbJlHN72RJDuojNu7G\nTD2DEaIqaKmgb/8o1umyPmTEFGIp6QFWQVwZhe6ft0zt8Len0OXJPAruDAOzD+wM\nTWwtT7HbfJR1Y4VnqHlUt4i/EkMgerl4C01s6cs6Ji573a5R561EVArUhhjuUKZ6\nHH5akZxCRIA5rZI3YcGvqpqgYGaMyrPt34jbvUXSXsq3EIChaysUvntkqjR+vfH7\nNpCuTe2BpWBDfZXJLJo3rRVchIgGLIsw0ofMdDq5nwdsBGHneOpC/FtSug7LjO8E\ncQIDAQAB\n-----END PUBLIC KEY-----'}, 'vote_signature': '58144b38d3c9bca718a1baac0ba1563eee486a23967d164b9fdba7fa348658cd7f6cfd1fb7002b457aacfa15c2f7740288805df5ace366f7a05a0534336b5dc125e3c8b4aa7bcd26083fe8bea972a41aa0e70bab002a8c3685129b9c4250296b1bf77d47804c2e3eb503c910431e81fd970a6ba6636ad6aba7412a33027046e19d6ec31d5fc2a4abbe67d36d5846f2c34c20b26d7f2ea33cd1bcd40f6e45eda1e33f4598601825b54c29b97a4a4a7eeeb1c764fe9787acacf68ba98e70aa056280c15d68515ad9d67ca59ab888c0c1121ae3bfa39048d8cf6fe055d2caac71a802d5ad3efc512d7bfca6a8a76a56eec7a3f1e7d71f1821ea4bde398a37e19ea3', 'voter_pub_key': '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwa/0GXC1UOc7rWD/vyLC\nP86Bv+wOB4KmKODBKpB5hCUpSIHk/r+Xk71tJ6b1CCfoosNbJlHN72RJDuojNu7G\nTD2DEaIqaKmgb/8o1umyPmTEFGIp6QFWQVwZhe6ft0zt8Len0OXJPAruDAOzD+wM\nTWwtT7HbfJR1Y4VnqHlUt4i/EkMgerl4C01s6cs6Ji573a5R561EVArUhhjuUKZ6\nHH5akZxCRIA5rZI3YcGvqpqgYGaMyrPt34jbvUXSXsq3EIChaysUvntkqjR+vfH7\nNpCuTe2BpWBDfZXJLJo3rRVchIgGLIsw0ofMdDq5nwdsBGHneOpC/FtSug7LjO8E\ncQIDAQAB\n-----END PUBLIC KEY-----', 'weight': 4}
+Exception ignored in atexit callback: <function KafkaProducer._cleanup_factory.<locals>.wrapper at 0x106319260>
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 454, in wrapper
+    _self.close(timeout=0, null_logger=True)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 509, in close
+    self.flush(timeout)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 686, in flush
+    self._accumulator.await_flush_completion(timeout=timeout)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/record_accumulator.py", line 531, in await_flush_completion
+    raise Errors.KafkaTimeoutError('Timeout waiting for future')
+kafka.errors.KafkaTimeoutError: KafkaTimeoutError: Timeout waiting for future
+Exception ignored in: <function KafkaProducer.__del__ at 0x105e13560>
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 477, in __del__
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 509, in close
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 686, in flush
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/record_accumulator.py", line 531, in await_flush_completion
+kafka.errors.KafkaTimeoutError: KafkaTimeoutError: Timeout waiting for future
+e

@@ -1,0 +1,35 @@
+Traceback (most recent call last):
+  File "/Users/chahal/OptimalConsensus_MAS/src/agent.py", line 72, in <module>
+    agent = Agent(args.agent_id, args.stake, args.byz)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/chahal/OptimalConsensus_MAS/src/agent.py", line 22, in __init__
+    self.producer = KafkaProducer(
+                    ^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 406, in __init__
+    client = self.config['kafka_client'](
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/client_async.py", line 262, in __init__
+    self.config['api_version'] = self.check_version()
+                                 ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/client_async.py", line 1064, in check_version
+    raise Errors.NoBrokersAvailable()
+kafka.errors.NoBrokersAvailable: NoBrokersAvailable
+ed55c3e1f1eb26b4b07581e8a693448c362', 'public_key': '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAke2VSWjC1OkiQGe8BxNE\ny6kqbM8KebjsVMI8CcGgOuMmVeMgjlS0hnPgPVk/TS6f9n0bKatrXBUqX+tvfAZN\n7Rrw8y/AQ2iYVh3FxzIFSI9ezkYCIiOiko8mIzMh7R0qXnu8GZWZ2OBMaSjwuIvu\nWhSNzL54feyQQgV/cNS4L5fdBeGlAhVoUb6VTsFmCQjorr1t+SPKtn2z58L8sLVR\nrmldbP7uxwgEab3bT0GoBeIE95KeEEmHVUVcPaYUZSDV7DDKEzdHmpSYxVZVNdiR\nRveW+O/vX2hpaRfHiMH+xpeMjk5Ghq51TC9xZmTZ3Te21gee84YeO3DghzPufDW2\npwIDAQAB\n-----END PUBLIC KEY-----'}, 'vote_signature': '01165cb5ecdb34d198a3f33d28570a82799b7537ee089d57ad908db05cae9a7b08daa2bb46e361cf223d7572f925038edee7e3a35a5b9d3b5043c540dd979a34a618f18a20e8b0eb1aa867317bba4a769401162c84467fedb5489aeddd3ee59c947f693d3ab24c0b8e15a2d2f387fd84185b0cf57579614ed126ca06439a57e531c66ab5649b13337e062c7bb76929ac4d8d18ec66b7c9eb62d75d71336949369a7d5f653a4cfeb35027cb4baf29aa5efd4d0024579f85a25497472034757c27cbbe84097a6f7a2afaeb631f5aeb7ee4ba95e665f4e8fe819c61de9a7ab754e173f8b134a451bd66ed916cfad4f0497faa472dcf28f07cb2cf106b42d284f646', 'voter_pub_key': '-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAke2VSWjC1OkiQGe8BxNE\ny6kqbM8KebjsVMI8CcGgOuMmVeMgjlS0hnPgPVk/TS6f9n0bKatrXBUqX+tvfAZN\n7Rrw8y/AQ2iYVh3FxzIFSI9ezkYCIiOiko8mIzMh7R0qXnu8GZWZ2OBMaSjwuIvu\nWhSNzL54feyQQgV/cNS4L5fdBeGlAhVoUb6VTsFmCQjorr1t+SPKtn2z58L8sLVR\nrmldbP7uxwgEab3bT0GoBeIE95KeEEmHVUVcPaYUZSDV7DDKEzdHmpSYxVZVNdiR\nRveW+O/vX2hpaRfHiMH+xpeMjk5Ghq51TC9xZmTZ3Te21gee84YeO3DghzPufDW2\npwIDAQAB\n-----END PUBLIC KEY-----', 'weight': 8}
+Exception ignored in atexit callback: <function KafkaProducer._cleanup_factory.<locals>.wrapper at 0x105e05260>
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 454, in wrapper
+    _self.close(timeout=0, null_logger=True)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 509, in close
+    self.flush(timeout)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 686, in flush
+    self._accumulator.await_flush_completion(timeout=timeout)
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/record_accumulator.py", line 531, in await_flush_completion
+    raise Errors.KafkaTimeoutError('Timeout waiting for future')
+kafka.errors.KafkaTimeoutError: KafkaTimeoutError: Timeout waiting for future
+Exception ignored in: <function KafkaProducer.__del__ at 0x105a07560>
+Traceback (most recent call last):
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 477, in __del__
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 509, in close
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 686, in flush
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/record_accumulator.py", line 531, in await_flush_completion
+kafka.errors.KafkaTimeoutError: KafkaTimeoutError: Timeout waiting for future
