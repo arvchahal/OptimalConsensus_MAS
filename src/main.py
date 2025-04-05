@@ -33,15 +33,35 @@ def main(num_agents, num_validators, threshold):
     total_validator_stake = sum([stake_system.stakes[vid] for vid in validators_ids])
     
     # Initialize Consensus with a threshold (e.g., 67% or 0.67)
-    consensus_instance = Consensus(threshold, total_validator_stake)
+    consensus_instance = Consensus(threshold, total_validator_stake, stake_system)
+    consensus_instance.set_current_proposal(proposal)
 
     # Validators vote for the leader's proposal.
     print("\nValidators Voting:")
     for agent in agents:
         if agent.agent_id in validators_ids:
             weight = stake_system.stakes[agent.agent_id]
-            consensus_instance.register_vote(proposal, weight)
-            print(f"Agent {agent.agent_id} (stake {weight}) voted for the proposal.")
+            
+            # Simulate occasional bad votes (e.g., 10% chance)
+            if random.random() < 0.1:
+                # Create invalid vote signature
+                vote = agent.create_bad_vote(proposal)
+                success = consensus_instance.register_vote(
+                    proposal, agent.agent_id, weight, 
+                    vote.signature, agent.public_key
+                )
+                if not success:
+                    # Update weight after slashing
+                    weight = stake_system.stakes[agent.agent_id]
+                    print(f"Agent {agent.agent_id} had stake reduced to {weight}")
+            else:
+                # Normal voting
+                consensus_instance.register_vote(
+                    proposal, agent.agent_id, weight,
+                    agent.create_valid_vote(proposal).signature,
+                    agent.public_key
+                )
+                print(f"Agent {agent.agent_id} (stake {weight}) voted for the proposal.")
 
     # Aggregate votes and determine if consensus is reached.
     accepted_block = consensus_instance.aggregate_votes()
