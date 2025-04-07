@@ -1,8 +1,3 @@
-
-
-#########################
-# agent.py
-#########################
 from kafka import KafkaProducer
 import json
 import random
@@ -21,15 +16,22 @@ class Agent:
         self.private_key, self.public_key = generate_keys()
         self.producer = KafkaProducer(
             bootstrap_servers='localhost:9092',
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            # Increase timeouts if needed:
+            request_timeout_ms=30000,    # 30s
+            delivery_timeout_ms=60000    # 60s
         )
 
     def create_proposal(self):
+        """
+        Create and sign a proposal transaction with a timezone-aware timestamp.
+        """
         tx = Transaction(
             proposer=self.agent_id,
             action="PROPOSE_BLOCK",
             metadata="Block_A",
-            timestamp=str(datetime.datetime.utcnow())
+            # Use timezone-aware current time
+            timestamp=str(datetime.datetime.now(datetime.timezone.utc))
         )
         tx.sign_transaction(self.private_key)
         return tx
@@ -58,8 +60,19 @@ class Agent:
             "weight": self.stake
         }
 
+        # Publish vote
         self.producer.send("votes", vote)
         print(f"Agent {self.agent_id} published vote: {vote}")
+
+    def shutdown(self):
+        """
+        Gracefully flush and close the Kafka producer to avoid KafkaTimeoutError at exit.
+        """
+        try:
+            self.producer.flush()
+            self.producer.close()
+        except Exception as e:
+            print(f"Error while closing producer: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -76,3 +89,8 @@ if __name__ == "__main__":
     proposal.public_key = agent.public_key  # Attach for broadcast
     agent.vote(proposal)
 
+    # Give Kafka a little time to send
+    time.sleep(1)
+
+    # Ensure the producer finishes in-flight messages
+    agent.shutdown()
