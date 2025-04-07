@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/Users/chahal/OptimalConsensus_MAS/src/agent.py", line 85, in <module>
+    agent = Agent(args.agent_id, args.stake, args.byz)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/chahal/OptimalConsensus_MAS/src/agent.py", line 17, in __init__
+    self.producer = KafkaProducer(
+                    ^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.12/site-packages/kafka/producer/kafka.py", line 379, in __init__
+    assert not configs, 'Unrecognized configs: %s' % (configs,)
+           ^^^^^^^^^^^
+AssertionError: Unrecognized configs: {'delivery_timeout_ms': 60000}
