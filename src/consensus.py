@@ -1,3 +1,4 @@
+####consensus.py
 from kafka import KafkaConsumer
 import sys
 import json
@@ -5,7 +6,8 @@ from transaction import Transaction
 from security import verify_signature, generate_keys
 from vote import Vote  # if you need to instantiate a Vote object
                       # for more detailed validation
-
+import sys
+from stake import Stake
 class Consensus:
     """Implements a probabilistic PoS voting consensus with slashing."""
     def __init__(self, threshold, total_weight, stake_system=None):
@@ -159,15 +161,32 @@ class Consensus:
         return None
 
 
+
+
 if __name__ == "__main__":
-    # E.g. usage: python consensus.py 0.67 100
+    if len(sys.argv) < 3:
+        print("Usage: python consensus.py <threshold> <total_stake>")
+        sys.exit(1)
+
     threshold = float(sys.argv[1])
     total_stake = int(sys.argv[2])
 
-    # If you have a stake system, pass it in. For example:
-    # from stake import Stake
-    # stake_system = Stake()
-    # consensus = Consensus(threshold, total_stake, stake_system)
-    # But if not, just do:
-    consensus = Consensus(threshold, total_stake)
+    st = Stake()
+
+    # Read stakes safely
+    with open("agent_stakes.txt", "r") as f:
+        for line in f:
+            if line.strip():  # skip empty lines!
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    agent_id_str, stake_str = parts
+                    agent_id = int(agent_id_str)
+                    stake_amt = int(stake_str)
+                    st.stake(agent_id, stake_amt)
+                else:
+                    print(f"Skipping malformed line: '{line.strip()}'")
+
+    consensus = Consensus(threshold, total_stake, stake_system=st)
     consensus.listen()
+
+

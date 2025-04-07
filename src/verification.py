@@ -1,5 +1,6 @@
-import time
+####voteverifier.py
 
+import time
 class VoteVerifier:
     def __init__(self):
         self.bad_votes = {}  # Track bad votes by agent_id

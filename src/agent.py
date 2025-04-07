@@ -1,3 +1,5 @@
+#### AGENT.py
+
 from kafka import KafkaProducer
 import json
 import random
@@ -8,9 +10,6 @@ import datetime
 
 from security import generate_keys, sign_message
 from transaction import Transaction
-
-# If you have a separate 'vote.py' or 'Vote' class, you can import it here:
-# from vote import Vote
 
 
 class Agent:
@@ -31,7 +30,6 @@ class Agent:
             bootstrap_servers='localhost:9092',
             value_serializer=lambda v: json.dumps(v).encode('utf-8'),
             request_timeout_ms=30000,   # 30s
-            delivery_timeout_ms=60000   # 60s
         )
 
     # ----------------------

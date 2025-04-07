@@ -1,3 +1,4 @@
+####stake.py
 import random
 
 class Stake:
