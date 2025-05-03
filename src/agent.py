@@ -140,6 +140,30 @@ class Agent:
             self.producer.close()
         except Exception as e:
             print(f"Error while closing producer: {e}")
+    def handle_election(self, msg):
+        if msg['leader_id'] == self.id:
+            self.propose_block(msg['round'])
+
+    def propose_block(self, height):
+        tx = Transaction(self.id, "PROPOSE_BLOCK",
+                        metadata=f"Block_{height}", timestamp=datetime.utcnow())
+        tx.sign_transaction(self.private_key)
+        self.producer.send("proposal", value=tx.to_dict())
+
+    def handle_proposal(self, proposal):
+        # verify leader’s sig, then vote
+        vote_tx = Transaction(self.id, "VOTE",
+                            metadata=proposal['metadata'],
+                            timestamp=datetime.utcnow())
+        vote_tx.sign_transaction(self.private_key)
+        payload = {
+            "agent_id": self.id,
+            "proposal_id": proposal['metadata'],
+            "vote_signature": vote_tx.signature.hex(),
+            "voter_pub_key": self.public_key.decode(),
+            "weight": self.stake
+        }
+        self.producer.send("votes", value=payload)
 
 # ----------------------
 # Command-Line Entry Point

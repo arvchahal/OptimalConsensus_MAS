@@ -60,3 +60,31 @@ class Stake:
                 self.stakes[agent_id] = 1
             return slash_amount
         return 0
+    def reward(self, agent_id, reward_percentage):
+        """
+        Increase an agent's stake as a reward for correct behavior
+        
+        Parameters:
+        agent_id: The ID of the agent to reward
+        reward_percentage: Percentage of stake to reward (0.0-1.0)
+        
+        Returns:
+        int: Amount rewarded
+        """
+        if agent_id in self.stakes:
+            reward_amount = int(self.stakes[agent_id] * reward_percentage)
+            self.stakes[agent_id] += reward_amount
+            return reward_amount
+        else:
+            # If agent isn't already staked, optionally stake them initially
+            self.stakes[agent_id] = 1  # initial stake
+            return 1
+    def pick_leader(self):
+        # returns (agent_id, stake)
+        total = sum(self.stakes.values())
+        r = random.uniform(0, total)
+        cumulative = 0
+        for agent, amt in self.stakes.items():
+            cumulative += amt
+            if r <= cumulative:
+                return agent, amt

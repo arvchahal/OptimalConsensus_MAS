@@ -1,128 +1,121 @@
 #!/bin/bash
-
-#######################
+###############################################################################
 # 1. CONFIGURATION
-#######################
-NUM_AGENTS=1000
+###############################################################################
+NUM_AGENTS=100
 CONSENSUS_THRESHOLD=0.67
-BYZANTINE_PERCENT=0.10 # 10% Byzantine agents
-KAFKA_DIR=/usr/local/opt/kafka
+BYZANTINE_PERCENT=0.30       # 30 % Byzantine agents
+
+KAFKA_DIR=/usr/local/opt/kafka        # adjust if `kafka-topics.sh` lives elsewhere
 CONSENSUS_LOG=logs/consensus.log
 AGENT_LOG_DIR=logs/agents
-PROPOSAL_METADATA=Block_A
-BAD_PROPOSAL_METADATA=Block_BAD
-TOPIC=votes
+
 STAKE_FILE=agent_stakes.txt
 EXPERIMENT_LOG=logs/experiment_results.log
 
-# Setup logs
+###############################################################################
+# 2. LOG SETUP
+###############################################################################
 mkdir -p logs "$AGENT_LOG_DIR"
-echo "" > "$STAKE_FILE"
-echo "" > "$EXPERIMENT_LOG"
+: > "$STAKE_FILE"
+: > "$EXPERIMENT_LOG"
 
-#######################
-# 2. Start Kafka (macOS)
-#######################
+###############################################################################
+# 3. START KAFKA (macOS Homebrew install)
+###############################################################################
 echo "Starting Kafka services..."
 brew services start zookeeper
 sleep 2
 brew services start kafka
 sleep 5
 
-#######################
-# 3. Create Kafka Topic
-#######################
-"$KAFKA_DIR/bin/kafka-topics.sh" --create --if-not-exists \
-  --bootstrap-server localhost:9092 \
-  --replication-factor 1 --partitions 1 --topic "$TOPIC"
+echo "Waiting for broker on :9092 ..."
+until nc -z localhost 9092; do sleep 1; done
+echo "Kafka broker is up."
 
-#######################
-# 4. Assign stakes and Byzantine agents
-#######################
+###############################################################################
+# 4. CREATE TOPICS (votes / proposal / election)
+###############################################################################
+for TOPIC in votes proposal election; do
+  "$KAFKA_DIR/bin/kafka-topics.sh" --create --if-not-exists \
+    --bootstrap-server localhost:9092 \
+    --replication-factor 1 --partitions 1 --topic "$TOPIC" \
+    || { echo "❌ Failed to create topic $TOPIC"; exit 1; }
+done
+
+###############################################################################
+# 5. ASSIGN STAKES & PICK BYZANTINE AGENTS
+###############################################################################
 TOTAL_STAKE=0
-declare -a STAKES=()
-declare -a BYZANTINE_AGENTS=()
+declare -a STAKES          # 1‑indexed for convenience
+declare -a BYZANTINE_AGENTS
 
 NUM_BYZANTINE=$(echo "$NUM_AGENTS * $BYZANTINE_PERCENT" | bc | awk '{print int($1+0.5)}')
 
-echo "Launching $NUM_AGENTS agents ($NUM_BYZANTINE Byzantine agents)..."
+echo "Launching $NUM_AGENTS agents ($NUM_BYZANTINE Byzantine)…"
 
 for ((i=1; i<=NUM_AGENTS; i++)); do
   STAKE=$(( (RANDOM % 10) + 1 ))
   STAKES[$i]=$STAKE
   TOTAL_STAKE=$(( TOTAL_STAKE + STAKE ))
-
-  # Save stake
   echo "$i $STAKE" >> "$STAKE_FILE"
 done
 
-# Randomly select Byzantine agents
 BYZANTINE_AGENTS=($(shuf -i 1-"$NUM_AGENTS" -n "$NUM_BYZANTINE"))
 
-echo "Byzantine Agents: ${BYZANTINE_AGENTS[*]}"
-echo "Calculated TOTAL_STAKE=$TOTAL_STAKE"
+echo "Byzantine  : ${BYZANTINE_AGENTS[*]}"
+echo "TOTAL_STAKE: $TOTAL_STAKE"
 
-#######################
-# 5. Launch Consensus Listener
-#######################
-echo "Launching Consensus Listener..."
+###############################################################################
+# 6. LAUNCH CONSENSUS LISTENER
+###############################################################################
+echo "Launching Consensus Listener…"
 nohup python3 src/consensus.py "$CONSENSUS_THRESHOLD" "$TOTAL_STAKE" \
-  > "$CONSENSUS_LOG" 2>&1 &
+      > "$CONSENSUS_LOG" 2>&1 &
 
-#######################
-# 6. Spawn Agent Producers (Normal and Byzantine)
-#######################
+###############################################################################
+# 7. SPAWN AGENTS
+###############################################################################
 for ((i=1; i<=NUM_AGENTS; i++)); do
   STAKE_VALUE="${STAKES[$i]}"
-  
-  if [[ " ${BYZANTINE_AGENTS[@]} " =~ " $i " ]]; then
-    # Byzantine agent votes incorrectly
-    nohup python3 src/agent.py "$i" "$STAKE_VALUE" "$BAD_PROPOSAL_METADATA" --byz \
-      > "$AGENT_LOG_DIR/agent_${i}_byzantine.log" 2>&1 &
-  else
-    # Normal agent votes correctly
-    nohup python3 src/agent.py "$i" "$STAKE_VALUE" "$PROPOSAL_METADATA" \
-      > "$AGENT_LOG_DIR/agent_${i}.log" 2>&1 &
+  EXTRA_FLAG=""
+  if [[ " ${BYZANTINE_AGENTS[*]} " =~ " $i " ]]; then
+    EXTRA_FLAG="--byz"
   fi
+  nohup python3 src/agent.py --id "$i" --stake "$STAKE_VALUE" $EXTRA_FLAG \
+       > "$AGENT_LOG_DIR/agent_${i}.log" 2>&1 &
 done
+echo "✅ All agents started."
 
-echo "✅ All agents (normal & Byzantine) running."
-
-#######################
-# 7. Wait for Consensus Outcome
-#######################
-echo "Waiting for consensus result..."
-
-TIME_START=$(date +%s)
-
-TIMEOUT=300 # 5 minutes timeout to prevent infinite loop
-SECONDS_ELAPSED=0
-
+###############################################################################
+# 8. WAIT FOR CONSENSUS RESULT (first round only)
+###############################################################################
+echo "Waiting for first consensus…"
+START_TIME=$(date +%s)
+TIMEOUT=300       # seconds
 CONSENSUS_REACHED=false
-while [[ $SECONDS_ELAPSED -lt $TIMEOUT ]]; do
-  if grep -q "Consensus reached on proposal" "$CONSENSUS_LOG"; then
+
+while (( $(date +%s) - START_TIME < TIMEOUT )); do
+  if grep -q "🏁 Round" "$CONSENSUS_LOG"; then
     CONSENSUS_REACHED=true
     break
   fi
   sleep 2
-  SECONDS_ELAPSED=$(( $(date +%s) - TIME_START ))
 done
 
-TIME_END=$(date +%s)
-TIME_TO_CONSENSUS=$((TIME_END - TIME_START))
+ELAPSED=$(( $(date +%s) - START_TIME ))
 
 if $CONSENSUS_REACHED; then
-  echo "🎉 Consensus reached in $TIME_TO_CONSENSUS seconds."
-  echo "SUCCESS $TIME_TO_CONSENSUS $NUM_AGENTS $NUM_BYZANTINE" >> "$EXPERIMENT_LOG"
+  echo "🎉 Consensus reached in $ELAPSED s."
+  echo "SUCCESS $ELAPSED $NUM_AGENTS $NUM_BYZANTINE" >> "$EXPERIMENT_LOG"
 else
-  echo "❌ Consensus NOT reached in $TIME_TO_CONSENSUS seconds."
-  echo "FAILURE $TIME_TO_CONSENSUS $NUM_AGENTS $NUM_BYZANTINE" >> "$EXPERIMENT_LOG"
+  echo "❌ No consensus within $ELAPSED s."
+  echo "FAILURE $ELAPSED $NUM_AGENTS $NUM_BYZANTINE" >> "$EXPERIMENT_LOG"
 fi
 
-#######################
-# 8. Shutdown Kafka
-#######################
+###############################################################################
+# 9. CLEAN SHUTDOWN
+###############################################################################
 brew services stop kafka
 brew services stop zookeeper
-
 echo "Experiment complete."

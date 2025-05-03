@@ -22,7 +22,7 @@ class VoteVerifier:
             return False
             
         # 3. If we know what proposal is being voted on, verify vote is for that
-        if expected_proposal and vote.proposal_id != expected_proposal.id:
+        if expected_proposal and vote.proposal_id != expected_proposal:
             self._record_bad_vote(agent_id, "wrong_proposal")
             return False
             
