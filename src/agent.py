@@ -1,193 +1,217 @@
-#### AGENT.py
+#!/usr/bin/env python3
+"""
+Agent process for the PoS demo.
 
-from kafka import KafkaProducer
-import json
-import random
-import sys
-import time
+Honest validator:
+    python3 agent.py --id 7 --stake 5 --proposal Block_A
+
+Byzantine validator (still just votes Block_BAD):
+    python3 agent.py --id 11 --stake 8 --proposal Block_BAD --byz
+"""
+from __future__ import annotations
 import argparse
-import datetime
+import json
+import threading
+import time
+from datetime import datetime, timezone
+
+from kafka import KafkaConsumer, KafkaProducer
 
 from security import generate_keys, sign_message
 from transaction import Transaction
 
 
 class Agent:
-    def __init__(self, agent_id, stake, is_byzantine):
+    # ------------------------------------------------------------------ #
+    #  Construction                                                      #
+    # ------------------------------------------------------------------ #
+    def __init__(self, agent_id: int, stake: int, proposal_meta: str, is_byzantine: bool):
         self.agent_id = agent_id
         self.stake = stake
+        self.proposal_metadata = proposal_meta
         self.is_byzantine = is_byzantine
 
-        # Additional fields from the “slashing” side
-        self.decisions = []  # placeholder for internal decisions
-        self.is_leader = False
-
-        # Generate keys for signing proposals/votes
         self.private_key, self.public_key = generate_keys()
 
-        # Kafka Producer
+        # ---------------- Producer ------------------------------------ #
         self.producer = KafkaProducer(
-            bootstrap_servers='localhost:9092',
-            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-            request_timeout_ms=30000,   # 30s
+            bootstrap_servers="localhost:9092",
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            request_timeout_ms=30_000,
         )
 
-    # ----------------------
-    # Methods from “slashing” side
-    # ----------------------
+        # ---------------- Consumer ------------------------------------ #
+        self.consumer = KafkaConsumer(
+            "election",
+            "proposal",
+            bootstrap_servers="localhost:9092",
+            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            auto_offset_reset="earliest",
+            group_id=f"agent-{self.agent_id}",
+        )
 
-    def propose_legacy(self):
-        """
-        For simplicity, generate a 'legacy' style proposal (a block) as a string.
-        Retained from 'slashing' branch in case you still want to use it.
-        """
-        proposal = f"Block proposed by Agent {self.agent_id}: {random.randint(1,100)}"
-        return proposal
+        # ---------------- State flags --------------------------------- #
+        self.current_round: int | None = None
+        self.leader_id: int | None = None
+        self._proposed = False
+        self._voted = False
 
-    def create_valid_vote_obj(self, proposal_str):
-        """
-        Create a valid Vote object for the given proposal string (if using vote.py).
-        """
-        from vote import Vote
-        vote = Vote(self.agent_id, proposal_str)
-        vote.sign_transaction(self.private_key)
-        return vote
+        # ---------------- Threads ------------------------------------- #
+        self.listener = threading.Thread(target=self._background_loop, daemon=True)
+        self.listener.start()
 
-    def create_bad_vote_obj(self, proposal_str):
-        """
-        Create an invalid Vote object with a corrupted signature or wrong proposal.
-        """
-        from vote import Vote
-        import random
-        bad_type = random.choice(["wrong_signature", "wrong_proposal", "stale_timestamp"])
+        self.heartbeat = threading.Thread(target=self._leader_heartbeat, daemon=True)
+        self.heartbeat.start()
 
-        vote = Vote(self.agent_id, proposal_str)
-        if bad_type == "wrong_signature":
-            # Corrupt the metadata before signing
-            vote.metadata["corrupted"] = "yes"
-            vote.sign_transaction(self.private_key)
-            # Remove the corruption post-sign -> signature mismatch
-            vote.metadata.pop("corrupted")
+    # ------------------------------------------------------------------ #
+    #  Background Kafka loop                                             #
+    # ------------------------------------------------------------------ #
+    def _background_loop(self):
+        print(f"🧵 Agent {self.agent_id} listener running")
+        for record in self.consumer:
+            topic, msg = record.topic, record.value
+            if topic == "election":
+                self._handle_election(msg)
+            elif topic == "proposal":
+                self._handle_proposal(msg)
 
-        elif bad_type == "wrong_proposal":
-            # Vote for a different fake proposal
-            fake_proposal = f"Fake proposal: {random.randint(1000, 9999)}"
-            vote = Vote(self.agent_id, fake_proposal)
-            vote.sign_transaction(self.private_key)
+    # ------------------------------------------------------------------ #
+    #  Election and proposal handling                                    #
+    # ------------------------------------------------------------------ #
+    def _handle_election(self, msg: dict):
+        """Called when *any* election arrives."""
+        self.current_round = msg["round"]
+        self.leader_id = msg["leader_id"]
+        self._proposed = False
+        self._voted = False
 
-        elif bad_type == "stale_timestamp":
-            # Set timestamp to 10 minutes ago
-            vote.timestamp = time.time() - 600
-            vote.sign_transaction(self.private_key)
+        if self.leader_id == self.agent_id:
+            print(f"👑 Agent {self.agent_id} elected leader for round {self.current_round}")
+            self._send_proposal()          # first attempt immediately
 
-        return vote
+    def _send_proposal(self):
+        if self._proposed:
+            return
+        tx = self._create_proposal_tx()
+        proposal_dict = {
+            "proposer": tx.proposer,
+            "action": tx.action,
+            "metadata": tx.metadata,
+            "timestamp": tx.timestamp,
+            "signature": tx.signature.hex(),
+            "public_key": tx.public_key.decode(),
+        }
+        self.producer.send("proposal", proposal_dict)
+        self.producer.flush()
+        self._proposed = True
+        print(f"🚀 Agent {self.agent_id} broadcast proposal {tx.metadata}")
 
-    # ----------------------
-    # Methods from “main” side
-    # ----------------------
+    def _handle_proposal(self, msg: dict):
+        """Follower (or leader itself) receives the leader’s block and votes."""
+        if self._voted:
+            return
+        if msg["metadata"] != self.proposal_metadata:
+            return  # honest policy: ignore blocks we don't support
 
-    def create_proposal(self):
-        """
-        Create and sign a proposal Transaction with a timezone-aware timestamp.
-        This is your primary method for a real consensus flow.
-        """
         tx = Transaction(
-            proposer=self.agent_id,
-            action="PROPOSE_BLOCK",
-            metadata="Block_A",
-            timestamp=str(datetime.datetime.now(datetime.timezone.utc))
+            proposer=msg["proposer"],
+            action=msg["action"],
+            metadata=msg["metadata"],
+            timestamp=msg["timestamp"],
         )
-        tx.sign_transaction(self.private_key)
-        return tx
+        tx.signature = bytes.fromhex(msg["signature"])
+        tx.public_key = msg["public_key"].encode()
+        self._publish_vote_for(tx)
+        self._voted = True
+        print(f"🗳  Agent {self.agent_id} voted for {tx.metadata}")
 
-    def vote(self, proposal):
-        """
-        Verifies the proposal's signature, then signs a 'vote' message and publishes to Kafka.
-        """
-        # Validate the proposal
+    # ------------------------------------------------------------------ #
+    #  Leader heartbeat / retry                                          #
+    # ------------------------------------------------------------------ #
+    def _leader_heartbeat(self):
+        while True:
+            time.sleep(1.5)
+            if (
+                self.leader_id == self.agent_id
+                and not self._proposed
+                and self.current_round is not None
+            ):
+                print(f"⏰ Agent {self.agent_id} retrying proposal (round {self.current_round})")
+                self._send_proposal()
+
+    # ------------------------------------------------------------------ #
+    #  Vote publishing helper                                            #
+    # ------------------------------------------------------------------ #
+    def _publish_vote_for(self, proposal: Transaction):
         if not proposal.verify_signature(proposal.public_key):
-            print(f"Agent {self.agent_id}: Invalid proposal signature. Rejecting.")
+            print(f"⚠️  Agent {self.agent_id}: leader signature invalid")
             return
 
-        message = f"{self.agent_id}:{proposal.metadata}"
-        vote_signature = sign_message(message, self.private_key)
+        vote_msg = f"{self.agent_id}:{proposal.metadata}"
+        vote_sig = sign_message(vote_msg, self.private_key)
 
-        vote_dict = {
-            "agent_id": self.agent_id,
+        payload = {
+            "id": self.agent_id,
+            "weight": self.stake,
+            "vote_signature": vote_sig.hex(),
+            "voter_pub_key": self.public_key.decode(),
             "proposal": {
                 "proposer": proposal.proposer,
                 "action": proposal.action,
                 "metadata": proposal.metadata,
                 "timestamp": proposal.timestamp,
                 "signature": proposal.signature.hex(),
-                "public_key": proposal.public_key.decode()
+                "public_key": proposal.public_key.decode(),
             },
-            "vote_signature": vote_signature.hex(),
-            "voter_pub_key": self.public_key.decode(),
-            "weight": self.stake
         }
+        self.producer.send("votes", payload)
+        self.producer.flush()
 
-        # Publish vote
-        self.producer.send("votes", vote_dict)
-        print(f"Agent {self.agent_id} published vote: {vote_dict}")
+    # ------------------------------------------------------------------ #
+    #  Helper: build proposal transaction                                #
+    # ------------------------------------------------------------------ #
+    def _create_proposal_tx(self) -> Transaction:
+        tx = Transaction(
+            proposer=self.agent_id,
+            action="PROPOSE_BLOCK",
+            metadata=self.proposal_metadata,
+            timestamp=str(datetime.now(timezone.utc).isoformat()),
+        )
+        tx.sign_transaction(self.private_key)
+        tx.public_key = self.public_key
+        return tx
 
+    # ------------------------------------------------------------------ #
+    #  Shutdown                                                          #
+    # ------------------------------------------------------------------ #
     def shutdown(self):
-        """
-        Flush and close the Kafka producer to avoid KafkaTimeoutError on process exit.
-        """
         try:
             self.producer.flush()
             self.producer.close()
-        except Exception as e:
-            print(f"Error while closing producer: {e}")
-    def handle_election(self, msg):
-        if msg['leader_id'] == self.id:
-            self.propose_block(msg['round'])
+            self.consumer.close()
+        except Exception as exc:
+            print(f"Agent {self.agent_id} close error: {exc}")
 
-    def propose_block(self, height):
-        tx = Transaction(self.id, "PROPOSE_BLOCK",
-                        metadata=f"Block_{height}", timestamp=datetime.utcnow())
-        tx.sign_transaction(self.private_key)
-        self.producer.send("proposal", value=tx.to_dict())
 
-    def handle_proposal(self, proposal):
-        # verify leader’s sig, then vote
-        vote_tx = Transaction(self.id, "VOTE",
-                            metadata=proposal['metadata'],
-                            timestamp=datetime.utcnow())
-        vote_tx.sign_transaction(self.private_key)
-        payload = {
-            "agent_id": self.id,
-            "proposal_id": proposal['metadata'],
-            "vote_signature": vote_tx.signature.hex(),
-            "voter_pub_key": self.public_key.decode(),
-            "weight": self.stake
-        }
-        self.producer.send("votes", value=payload)
-
-# ----------------------
-# Command-Line Entry Point
-# ----------------------
+# ---------------------------------------------------------------------- #
+#  CLI entry                                                             #
+# ---------------------------------------------------------------------- #
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("agent_id", type=int)
-    parser.add_argument("stake", type=int)
-    parser.add_argument("proposal_metadata")
-    parser.add_argument("--byz", action="store_true")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--id", type=int, required=True, help="Agent ID")
+    ap.add_argument("--stake", type=int, required=True, help="Stake value")
+    ap.add_argument("--proposal", type=str, required=True, help="Preferred block metadata")
+    ap.add_argument("--byz", action="store_true", help="Set if Byzantine")
+    args = ap.parse_args()
 
-    agent = Agent(args.agent_id, args.stake, args.byz)
-    time.sleep(args.agent_id)  # Stagger votes
+    # stagger startup a little
+    time.sleep(args.id * 0.05)
 
-    # Use the "main" style proposal
-    proposal = agent.create_proposal()
-    # Attach agent's pubkey to the proposal so other nodes can verify
-    proposal.public_key = agent.public_key
+    agent = Agent(args.id, args.stake, args.proposal, args.byz)
 
-    # Agent creates and sends a vote for that proposal
-    agent.vote(proposal)
-
-    # Give Kafka some time to send
-    time.sleep(1)
-    # Graceful shutdown
-    agent.shutdown()
+    # Keep main thread alive
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        agent.shutdown()

@@ -3,7 +3,7 @@ import json
 import sys
 import time
 from kafka import KafkaConsumer, KafkaProducer
-
+import threading
 from stake import Stake
 from transaction import Transaction
 from security import verify_signature, generate_keys
@@ -50,7 +50,13 @@ class Consensus:
 
         self.leader_id = self.stake_system.pick_leader()
         election_msg = {"round": self.current_round, "leader_id": self.leader_id}
-        self.producer.send("election", election_msg)
+
+        def _broadcast_election():
+            for _ in range(5):          # 5 seconds of retries
+                self.producer.send("election", election_msg)
+                self.producer.flush()
+                time.sleep(1)
+        threading.Thread(target=_broadcast_election, daemon=True).start()
         print(f"🗳  Round {self.current_round}: elected leader Agent {self.leader_id}")
 
     # --------------------------------------------------------------------- #
@@ -98,13 +104,19 @@ class Consensus:
         # (Optional) verify leader’s signature on the proposal here
 
         self.current_proposal = proposal_dict["metadata"]
+        print(f"[ROUND {self.current_round}] tracking proposal = {self.current_proposal}")
         print(f"📦  Leader Agent {proposer_id} proposed block: {self.current_proposal}")
 
     # --------------------------------------------------------------------- #
     #  Vote handling (same checks you had, just moved)                      #
     # --------------------------------------------------------------------- #
     def _handle_vote(self, vote_msg):
-        agent_id = vote_msg["agent_id"]
+        if self.current_proposal is None:
+            print('no prposal')
+            return 
+        else:
+            print(self.current_proposal)
+        agent_id = vote_msg["id"]
         weight = vote_msg["weight"]
         vote_signature_hex = vote_msg["vote_signature"]
         voter_pub_key_str = vote_msg["voter_pub_key"]
@@ -130,7 +142,6 @@ class Consensus:
         )
 
         candidate = proposal_dict["metadata"]
-
         if (
             proposal_valid
             and vote_valid
@@ -145,6 +156,7 @@ class Consensus:
         else:
             print(f"❌ Bad vote from Agent {agent_id} — slashing")
             self._slash_bad_vote(agent_id)
+        print(f"[DEBUG] {agent_id} voted {candidate}, weight={weight}")
 
     # --------------------------------------------------------------------- #
     #  Helpers                                                              #

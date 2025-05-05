@@ -80,11 +80,10 @@ class Stake:
             self.stakes[agent_id] = 1  # initial stake
             return 1
     def pick_leader(self):
-        # returns (agent_id, stake)
         total = sum(self.stakes.values())
         r = random.uniform(0, total)
         cumulative = 0
         for agent, amt in self.stakes.items():
             cumulative += amt
             if r <= cumulative:
-                return agent, amt
+                return agent      

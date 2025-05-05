@@ -15,6 +15,8 @@ class Transaction:
         self.signature = None
 
     def sign_transaction(self, private_key_str):
+        # print("[DEBUG] pem snippet:", public_key_str[:30])
+
         key = RSA.import_key(private_key_str)
         message = (str(self.proposer) + str(self.action) +
                    str(self.metadata) + str(self.timestamp)).encode()
@@ -22,6 +24,7 @@ class Transaction:
         self.signature = pkcs1_15.new(key).sign(h)
 
     def verify_signature(self, public_key_str):
+        print("[DEBUG] pem snippet:", public_key_str[:30])
         key = RSA.import_key(public_key_str)
         message = (str(self.proposer) + str(self.action) +
                    str(self.metadata) + str(self.timestamp)).encode()
